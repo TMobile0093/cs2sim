@@ -3395,7 +3395,9 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* профиль Steam игрока: ник и анимированная аватарка с рамкой (картинки грузятся со Steam) */
 const STEAMI='https://shared.fastly.steamstatic.com/community_assets/images/items/4101120/';
-const STEAMP={name:'T-Mobile',av:STEAMI+'3c7b88eecf7ce7331b9e7fafee078ec57efd24df.gif',avs:STEAMI+'c0e2bf589af5eb5ade36fe9e23e231968038f2e2.jpg',fr:STEAMI+'688f97fa743ac41b68ab10d5236a02f01ecb9725.png',frs:STEAMI+'3cbaea770a94cfd0de0200b82995aae6e3473280.png'};
+const STEAMP0={name:'T-Mobile',av:STEAMI+'3c7b88eecf7ce7331b9e7fafee078ec57efd24df.gif',avs:STEAMI+'c0e2bf589af5eb5ade36fe9e23e231968038f2e2.jpg',fr:STEAMI+'688f97fa743ac41b68ab10d5236a02f01ecb9725.png',frs:STEAMI+'3cbaea770a94cfd0de0200b82995aae6e3473280.png'};
+/* the linked Steam profile (Profile → Steam ID) replaces the built-in one */
+const STEAMP=new Proxy({},{get:(o,k)=>{const l=typeof S!=='undefined'&&S&&S.steam;return l&&k in l?l[k]:STEAMP0[k]}});
 function hashS(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 const rnd01=s=>(hashS(s)%100000)/100000;
 function gauss(s){const u=Math.max(1e-6,rnd01(s+'a')),v=rnd01(s+'b');return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
@@ -3564,7 +3566,7 @@ const KEY='cs2sim_v3';
 const PRIME_RUB=Math.round(PRIME_KZT/KZT_PER_RUB);
 const LVLXP=5000;
 function freshState(){return{
-  v:3,name:STEAMP.name,wallet:0,prime:false,weekly:-1,xp:0,lvl:1,pkgs:0,uid:1,
+  v:3,name:STEAMP0.name,steam:null,wallet:0,prime:false,weekly:-1,xp:0,lvl:1,pkgs:0,uid:1,
   prem:{hid:0,hist:[],w:0,l:0,d:0,peak:0,map:'mirage'},
   comp:{},wingm:{},
   inv:{items:[],crates:{},keys:0},
@@ -4051,7 +4053,7 @@ function xpToast(r){let t=`+${fmt(r.xp)} опыта`+(r.bonus?` (бонус пе
 
 /* аватарка из Steam: анимированный GIF и рамка поверх; при «уменьшении движения» — статичные картинки, без сети — буква */
 function steamAvatar(size=40){
-  return `<span class="sav" style="--s:${size}px"><b class="sav-l">${esc((S.name[0]||'?').toUpperCase())}</b><picture><source media="(prefers-reduced-motion: reduce)" srcset="${STEAMP.avs}"><img class="sav-a" src="${STEAMP.av}" alt="" onerror="this.parentNode.remove()"></picture><picture class="sav-fr"><source media="(prefers-reduced-motion: reduce)" srcset="${STEAMP.frs}"><img src="${STEAMP.fr}" alt="" onerror="this.parentNode.remove()"></picture></span>`;
+  return `<span class="sav" style="--s:${size}px"><b class="sav-l">${esc((S.name[0]||'?').toUpperCase())}</b><picture><source media="(prefers-reduced-motion: reduce)" srcset="${STEAMP.avs}"><img class="sav-a" src="${STEAMP.av}" referrerpolicy="no-referrer" alt="" onerror="this.parentNode.remove()"></picture>${STEAMP.fr?`<picture class="sav-fr"><source media="(prefers-reduced-motion: reduce)" srcset="${STEAMP.frs}"><img src="${STEAMP.fr}" alt="" onerror="this.parentNode.remove()"></picture>`:''}</span>`;
 }
 /* shell */
 function drawHeader(){
@@ -4865,7 +4867,8 @@ VIEWS.prof=function(m){
   const rb=(k,t,d)=>`<button class="btn sm ${armedRst===k?'loss':''}" data-a="rst" data-v="${k}" title="${d}">${armedRst===k?'Точно сбросить?':t}</button>`;
   m.innerHTML=`<div class="sechead"><div><h2>Профиль</h2><p>Звания, статистика и сброс данных.</p></div></div>
   <div class="panel ${S.prime?'primep':''}" style="margin-bottom:16px"><div class="row" style="justify-content:space-between"><div><h3 style="margin:0">${S.prime?PSTAR+' Статус Prime активен':LOCK+' Статуса Prime нет'}</h3><p class="mut" style="margin:4px 0 0">${S.prime?'Открыты Premier, звания, победы и поражения, еженедельный дроп.':'Premier закрыт, звания и победы не считаются, еженедельного дропа нет.'}</p></div>${S.prime?'':`<button class="btn pri" data-a="primeinfo">Получить за ${money(PRIME_RUB)}</button>`}</div></div>
-  <div class="g2"><div class="panel col"><div class="pid">${steamAvatar(96)}<div style="flex:1;min-width:0"><div class="pnick">${esc(S.name)}</div><div class="hint">Профиль Steam · уровень в симуляторе <b>${S.lvl}</b> · опыт ${fmt(S.xp)} / ${fmt(LVLXP)}</div><label class="mut" style="font-size:12px;display:block;margin-top:8px">Ник<input type="text" id="pname" value="${esc(S.name)}" maxlength="32"></label>${S.name!==STEAMP.name?`<button class="btn sm" style="margin-top:6px" data-a="psteam">Вернуть ник из Steam</button>`:''}</div></div>
+  <div class="g2"><div class="panel col"><div class="pid">${steamAvatar(96)}<div style="flex:1;min-width:0"><div class="pnick">${esc(S.name)}</div><div class="hint">Профиль Steam · уровень в симуляторе <b>${S.lvl}</b> · опыт ${fmt(S.xp)} / ${fmt(LVLXP)}</div><label class="mut" style="font-size:12px;display:block;margin-top:8px">Ник<input type="text" id="pname" value="${esc(S.name)}" maxlength="32"></label>${S.name!==STEAMP.name?`<button class="btn sm" style="margin-top:6px" data-a="psteam">Вернуть ник из Steam</button>`:''}
+   ${SITE?`<label class="mut" style="font-size:12px;display:block;margin-top:10px">Steam ID или ссылка на профиль<input type="text" id="psid" value="${esc(S.steam?S.steam.id:'')}" placeholder="76561198… или steamcommunity.com/id/ник" autocomplete="off"></label><div class="row" style="margin-top:6px"><button class="btn sm pri" data-a="sidgo">${S.steam?'Обновить':'Найти профиль'}</button>${S.steam?'<button class="btn sm" data-a="sidoff">Отвязать</button>':''}</div>`:''}</div></div>
    <div class="pbar"><i style="width:${S.xp/LVLXP*100}%"></i></div>
    <label class="row" style="gap:8px"><input type="checkbox" id="pmute" ${S.mute?'checked':''}> Выключить звуки</label>
    ${SITE?`<div class="syncbox"><div class="fh" style="margin:0 0 6px">Синхронизация ПК и телефона</div>${syncBadge()}${SYNC.user?`<p class="hint" style="margin:6px 0 0">Вход выполнен: <b>${esc(SYNC.user.email||SYNC.user.name||'')}</b>. Прогресс сохраняется через пару секунд после каждого действия.</p><div class="row" style="margin-top:8px">${SYNC.on?'<button class="btn sm" data-a="syncnow">Сохранить сейчас</button>':''}<button class="btn sm" data-a="gout">Выйти</button></div>`:`<p class="hint" style="margin:6px 0 8px">Войдите через Google на ПК и на телефоне с одним аккаунтом — прогресс, инвентарь, звания и ник будут синхронизироваться сами.</p><button class="btn pri sm" data-a="gin">Войти через Google</button>`}</div>`:`<div class="syncbox"><div class="fh" style="margin:0 0 6px">Синхронизация ПК и телефона</div>${syncBadge()}<p class="hint" style="margin:6px 0 0">Откройте симулятор на claude.ai под тем же аккаунтом на любом устройстве — прогресс, инвентарь, звания и ник подтянутся сами. Сохраняется через пару секунд после каждого действия.</p>${SYNC.on?'<button class="btn sm" style="margin-top:8px" data-a="syncnow">Сохранить сейчас</button>':''}</div>`}
@@ -4906,6 +4909,31 @@ A.gin=async()=>{if(!window.FBS){toast('Firebase ещё загружается, �
   try{await FBS.signIn()}catch(e){const c=e&&e.code||'';if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return;
     toast(c==='auth/unauthorized-domain'?'Домен сайта не добавлен в Firebase (Authorized domains)':'Не удалось войти'+(c?': '+c:''),5000)}};
 A.gout=async()=>{try{await FBS.signOut()}catch(e){}toast('Вы вышли — прогресс остаётся на этом устройстве')};
+/* Steam profile lookup (own site only): Steam pages don't allow direct browser requests, so they go through public CORS relays */
+const SPROX=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u),u=>'https://corsproxy.io/?url='+encodeURIComponent(u)];
+async function sFetch(u){let last;for(const f of SPROX){try{const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);const r=await fetch(f(u),{signal:c.signal});clearTimeout(t);if(r.ok){const x=await r.text();if(x&&x.length>20)return x}last=r.status}catch(e){last=e}}throw new Error('relay')}
+function sidPath(v){v=v.trim().replace(/\s+/g,'');let m;
+  if(/^\d{17}$/.test(v))return 'profiles/'+v;
+  if(m=/steamcommunity\.com\/profiles\/(\d{17})/i.exec(v))return 'profiles/'+m[1];
+  if(m=/steamcommunity\.com\/id\/([\w-]+)/i.exec(v))return 'id/'+m[1];
+  if(/^[\w-]{2,32}$/.test(v))return 'id/'+v;return null}
+const SIMG='https://shared.fastly.steamstatic.com/community_assets/images/';
+function sidParse(xml){const d=new DOMParser().parseFromString(xml,'text/xml'),g=k=>{const e=d.querySelector('profile>'+k);return e?e.textContent.trim():''};
+  const err=d.querySelector('response>error');if(err)return {err:err.textContent.trim()};
+  if(!g('steamID64'))return {err:'bad'};return {id:g('steamID64'),name:g('steamID'),avf:g('avatarFull'),priv:g('privacyState')}}
+A.sidgo=async()=>{const inp=$('#psid'),path=sidPath(inp?inp.value:'');if(!path){toast('Введите Steam ID (17 цифр) или ссылку на профиль');return}
+  const btn=document.querySelector('[data-a="sidgo"]');if(btn){btn.disabled=true;btn.textContent='Ищем…'}
+  try{
+    let p;try{p=sidParse(await sFetch('https://steamcommunity.com/'+path+'/?xml=1&l=english'))}catch(e){toast('Steam сейчас не отвечает — попробуйте ещё раз чуть позже',4500);return}
+    if(p.err){toast(/could not be found/i.test(p.err)?'Профиль не найден — проверьте Steam ID':'Не удалось прочитать профиль Steam',4500);return}
+    const o={id:p.id,name:p.name||STEAMP0.name,av:p.avf,avs:p.avf,fr:'',frs:''};
+    try{const j=JSON.parse(await sFetch('https://api.steampowered.com/IPlayerService/GetProfileItemsEquipped/v1/?steamid='+p.id)).response||{};
+      const a=j.animated_avatar,f=j.avatar_frame;
+      if(a&&a.image_large){o.av=SIMG+a.image_large;o.avs=a.image_small?SIMG+a.image_small:p.avf}
+      if(f&&f.image_large){o.fr=SIMG+f.image_large;o.frs=SIMG+(f.image_small||f.image_large)}}catch(e){}
+    S.steam=o;S.name=o.name;save();refresh();VIEWS.prof($('#main'));toast('Профиль Steam привязан: '+esc(o.name))
+  }finally{const b=document.querySelector('[data-a="sidgo"]');if(b){b.disabled=false;b.textContent=S.steam?'Обновить':'Найти профиль'}}};
+A.sidoff=()=>{S.steam=null;S.name=STEAMP0.name;save();refresh();VIEWS.prof($('#main'));toast('Профиль Steam отвязан')};
 A.psteam=()=>{S.name=STEAMP.name;save();refresh();VIEWS.prof($('#main'))};
 A.rst=a=>{
   const k=a.dataset.v;
