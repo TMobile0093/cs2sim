@@ -3687,7 +3687,7 @@ const syncSetLocalT=t=>{try{localStorage.setItem('cs2sim_t',String(t))}catch(e){
 function syncState(st,err){SYNC.state=st;SYNC.err=err||'';const el=document.getElementById('syncst');if(el)el.outerHTML=syncBadge();const hb=document.getElementById('synchb');if(hb)hb.className='synchb '+st}
 function syncBadge(){
   const t=SYNC.lastT?new Date(SYNC.lastT).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'';
-  const txt={off:'Синхронизация недоступна: откройте симулятор на claude.ai под своим аккаунтом',wait:'Подключаемся к облаку…',ok:'Прогресс сохраняется в облаке'+(t?' · последнее сохранение в '+t:''),save:'Сохраняем в облако…',offline:'Нет связи с облаком — сохраняем на устройстве и отправим позже',err:'Облако недоступно'+(SYNC.err?': '+SYNC.err:'')}[SYNC.state]||'';
+  const txt={off:SITE?'Синхронизация выключена — войдите через Google':'Синхронизация недоступна: откройте симулятор на claude.ai под своим аккаунтом',wait:'Подключаемся к облаку…',ok:'Прогресс сохраняется в облаке'+(t?' · последнее сохранение в '+t:''),save:'Сохраняем в облако…',offline:'Нет связи с облаком — сохраняем на устройстве и отправим позже',err:'Облако недоступно'+(SYNC.err?': '+SYNC.err:'')}[SYNC.state]||'';
   return `<div id="syncst" class="syncst ${SYNC.state}"><i></i><span>${esc(txt)}</span></div>`;
 }
 /* called from save(): local copy changed → remember when, upload a bit later */
@@ -3724,16 +3724,12 @@ setInterval(()=>{if(SYNC.deferred&&!modals.length&&!document.querySelector('.cel
 /* how much has been played on a save — used so an empty save never overwrites real progress */
 function syncWeight(o){if(!o)return 0;const st=o.stat||{},inv=o.inv||{};
   return (st.matches||0)*3+(st.opened||0)+(st.pk||0)+((inv.items||[]).length)*2+Object.values(inv.crates||{}).reduce((a,b)=>a+b,0)+(o.lvl||1)-1+(o.prime?20:0)+((o.wallet||0)>0?1:0)+((o.prem&&o.prem.hist||[]).length)}
-async function syncStart(){
-  if(!(window.claude&&claude.use))return;
-  syncState('wait');
-  let db,user;try{[db,user]=await Promise.all([claude.use('db'),claude.use('user')])}catch(e){}
-  if(!db||!user){syncState('off');return}
-  const id=await user.id();if(!id){syncState('off');return}
-  SYNC.db=db;SYNC.ref=db.doc('data/users/'+id+'/save');
+/* listen to the cloud save; ref = {set(obj), onSnapshot(cb, errCb) -> unsubscribe} */
+function syncAttach(ref){
+  SYNC.ref=ref;
   let first=true,settled=false;
   const to=setTimeout(()=>{if(!settled)syncState('offline')},10000);
-  SYNC.ref.onSnapshot(snap=>{
+  return ref.onSnapshot(snap=>{
     if(snap.metadata.fromCache&&first)return; // wait for the store's own answer before deciding
     settled=true;clearTimeout(to);
     const d=snap.exists?snap.data():null;
@@ -3751,8 +3747,24 @@ async function syncStart(){
     if(!d||typeof d.s!=='string'||snap.metadata.hasPendingWrites)return;
     if(d.dev!==SYNC.dev&&d.s!==SYNC.last&&(d.t||0)>=SYNC.lastT)syncApply(d);
     else{SYNC.last=d.s;SYNC.lastT=Math.max(SYNC.lastT,d.t||0);if(SYNC.state!=='save')syncState('ok')}
-  },e=>{clearTimeout(to);SYNC.on=false;syncState(e&&e.code==='revoked'?'off':'err')});
+  },e=>{clearTimeout(to);SYNC.on=false;const c=e&&e.code;syncState(c==='revoked'?'off':'err',c==='permission-denied'?'нет доступа к базе (проверьте правила Firestore)':'')});
 }
+async function syncStart(){
+  if(SITE){syncState('wait');setTimeout(()=>{if(!window.FBS&&SYNC.state==='wait')syncState('err','не удалось загрузить Firebase — проверьте интернет')},15000);return}
+  if(!(window.claude&&claude.use))return;
+  syncState('wait');
+  let db,user;try{[db,user]=await Promise.all([claude.use('db'),claude.use('user')])}catch(e){}
+  if(!db||!user){syncState('off');return}
+  const id=await user.id();if(!id){syncState('off');return}
+  SYNC.db=db;syncAttach(db.doc('data/users/'+id+'/save'));
+}
+/* own site: Firebase (module script in index.html) reports sign-in changes here */
+window.siteAuth=function(u,ref){
+  if(SYNC.unsub){try{SYNC.unsub()}catch(e){}SYNC.unsub=null}
+  SYNC.on=false;SYNC.last=null;SYNC.lastT=0;SYNC.user=u;
+  if(u&&ref){syncState('wait');SYNC.unsub=syncAttach(ref)}else syncState('off');
+  if(document.querySelector('.syncbox'))try{VIEWS.prof($('#main'))}catch(e){}
+};
 
 /* ===== art: generated item art (fallback for blocked Steam images), rank badges, map banners ===== */
 const WSH={
@@ -4856,7 +4868,7 @@ VIEWS.prof=function(m){
   <div class="g2"><div class="panel col"><div class="pid">${steamAvatar(96)}<div style="flex:1;min-width:0"><div class="pnick">${esc(S.name)}</div><div class="hint">Профиль Steam · уровень в симуляторе <b>${S.lvl}</b> · опыт ${fmt(S.xp)} / ${fmt(LVLXP)}</div><label class="mut" style="font-size:12px;display:block;margin-top:8px">Ник<input type="text" id="pname" value="${esc(S.name)}" maxlength="32"></label>${S.name!==STEAMP.name?`<button class="btn sm" style="margin-top:6px" data-a="psteam">Вернуть ник из Steam</button>`:''}</div></div>
    <div class="pbar"><i style="width:${S.xp/LVLXP*100}%"></i></div>
    <label class="row" style="gap:8px"><input type="checkbox" id="pmute" ${S.mute?'checked':''}> Выключить звуки</label>
-   ${SITE?'':`<div class="syncbox"><div class="fh" style="margin:0 0 6px">Синхронизация ПК и телефона</div>${syncBadge()}<p class="hint" style="margin:6px 0 0">Откройте симулятор на claude.ai под тем же аккаунтом на любом устройстве — прогресс, инвентарь, звания и ник подтянутся сами. Сохраняется через пару секунд после каждого действия.</p>${SYNC.on?'<button class="btn sm" style="margin-top:8px" data-a="syncnow">Сохранить сейчас</button>':''}</div>`}
+   ${SITE?`<div class="syncbox"><div class="fh" style="margin:0 0 6px">Синхронизация ПК и телефона</div>${syncBadge()}${SYNC.user?`<p class="hint" style="margin:6px 0 0">Вход выполнен: <b>${esc(SYNC.user.email||SYNC.user.name||'')}</b>. Прогресс сохраняется через пару секунд после каждого действия.</p><div class="row" style="margin-top:8px">${SYNC.on?'<button class="btn sm" data-a="syncnow">Сохранить сейчас</button>':''}<button class="btn sm" data-a="gout">Выйти</button></div>`:`<p class="hint" style="margin:6px 0 8px">Войдите через Google на ПК и на телефоне с одним аккаунтом — прогресс, инвентарь, звания и ник будут синхронизироваться сами.</p><button class="btn pri sm" data-a="gin">Войти через Google</button>`}</div>`:`<div class="syncbox"><div class="fh" style="margin:0 0 6px">Синхронизация ПК и телефона</div>${syncBadge()}<p class="hint" style="margin:6px 0 0">Откройте симулятор на claude.ai под тем же аккаунтом на любом устройстве — прогресс, инвентарь, звания и ник подтянутся сами. Сохраняется через пару секунд после каждого действия.</p>${SYNC.on?'<button class="btn sm" style="margin-top:8px" data-a="syncnow">Сохранить сейчас</button>':''}</div>`}
    <div class="syncbox"><div class="fh" style="margin:0 0 6px">Перенос прогресса</div><p class="hint" style="margin:0 0 8px">Код со всем прогрессом: скопируйте его здесь и вставьте в другой версии симулятора (например, на своём сайте).</p><div class="row"><button class="btn sm" data-a="xcopy">Получить код</button><button class="btn sm" data-a="xpaste">Вставить код</button></div></div></div>
   <div class="panel"><h3>Статистика</h3><div class="sgrid">
    <div class="stat"><b class="num">${s.matches}</b><span>матчей сыграно</span></div><div class="stat"><b class="num">${wr}%</b><span>побед в Premier</span></div>
@@ -4890,6 +4902,10 @@ A.xcopy=async()=>{const code=await xEncode(JSON.stringify(S));
 A.xpaste=()=>{const m=openModal(`<h3>Вставить код прогресса</h3><p class="hint">Текущий прогресс на этом устройстве заменится прогрессом из кода.</p><textarea id="xin" style="width:100%;height:140px;font:12px monospace" placeholder="CS2S1:…"></textarea><div class="row" style="margin-top:10px"><button class="btn pri" id="xgo">Загрузить прогресс</button></div>`);
   m.box.querySelector('#xgo').onclick=async()=>{let o;try{o=JSON.parse(await xDecode(m.box.querySelector('#xin').value));if(!o||typeof o!=='object'||!o.inv)throw 0}catch(e){toast('Код не подошёл — скопируйте его целиком');return}
     S=Object.assign(freshState(),o);save();try{FX.wal=S.wallet;FX.lvl=S.lvl}catch(e){}m.close();render();toast('Прогресс загружен')}};
+A.gin=async()=>{if(!window.FBS){toast('Firebase ещё загружается, попробуйте через пару секунд');return}
+  try{await FBS.signIn()}catch(e){const c=e&&e.code||'';if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return;
+    toast(c==='auth/unauthorized-domain'?'Домен сайта не добавлен в Firebase (Authorized domains)':'Не удалось войти'+(c?': '+c:''),5000)}};
+A.gout=async()=>{try{await FBS.signOut()}catch(e){}toast('Вы вышли — прогресс остаётся на этом устройстве')};
 A.psteam=()=>{S.name=STEAMP.name;save();refresh();VIEWS.prof($('#main'))};
 A.rst=a=>{
   const k=a.dataset.v;
@@ -4911,5 +4927,24 @@ load();if(S.name==='Игрок')S.name=STEAMP.name;
 render();
 fxBg();fxSplash();syncStart();
 (function(){const it=IT.find(x=>x.im);if(!it)return;const im=new Image();im.onload=()=>{REAL=true;if(!modals.length)render()};im.src=IMGBASE+it.im})();
+</script>
+<script type="module">
+/* own site only: Google sign-in + Firestore cloud save (saves/<uid>) */
+const V='10.12.2',B='https://www.gstatic.com/firebasejs/'+V+'/';
+const cfg={apiKey:"AIzaSyD_ZKCFP29_V01RzpHfG1UmcXvlQE_A_Xk",authDomain:"cs2sim-41b2d.firebaseapp.com",projectId:"cs2sim-41b2d",storageBucket:"cs2sim-41b2d.firebasestorage.app",messagingSenderId:"1088496045670",appId:"1:1088496045670:web:e22e82bffb2df39487e7a7"};
+const [{initializeApp},A,F]=await Promise.all([import(B+'firebase-app.js'),import(B+'firebase-auth.js'),import(B+'firebase-firestore.js')]);
+const app=initializeApp(cfg),auth=A.getAuth(app),db=F.getFirestore(app);
+const prov=()=>{const p=new A.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});return p};
+window.FBS={
+  async signIn(){try{await A.signInWithPopup(auth,prov())}catch(e){if(e&&(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-environment'))await A.signInWithRedirect(auth,prov());else throw e}},
+  signOut:()=>A.signOut(auth)};
+A.getRedirectResult(auth).catch(()=>{});
+A.onAuthStateChanged(auth,u=>{
+  if(!u){window.siteAuth(null,null);return}
+  const d=F.doc(db,'saves',u.uid);
+  window.siteAuth({name:u.displayName,email:u.email},{
+    set:o=>F.setDoc(d,o),
+    onSnapshot:(cb,eb)=>F.onSnapshot(d,s=>cb({exists:s.exists(),data:()=>s.data(),metadata:s.metadata}),eb)});
+});
 </script>
 </body></html>
