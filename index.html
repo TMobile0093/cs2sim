@@ -559,6 +559,14 @@ main{min-height:60vh}
 .syncst.save i,.syncst.wait i{background:#f4c46a;animation:dotPulse 1.2s infinite}
 .syncst.offline i,.syncst.err i{background:#e8515a}
 
+.lostrow{display:flex;align-items:center;gap:12px;padding:8px 10px;margin:6px 0;border-radius:6px;background:rgba(255,255,255,.04);border-left:3px solid var(--rc)}
+.lostimg{flex:none;width:72px;height:54px;display:flex;align-items:center;justify-content:center}
+.lostimg img,.lostimg svg{max-width:100%;max-height:100%}
+.lostt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.lostt b{font-size:14px;overflow-wrap:anywhere}
+.lostt span{font-size:12px;color:#9aa7b5}
+.lostp{flex:none;font-weight:700;color:#d6dde6}
+
 </style>
 <canvas id="bgfx" aria-hidden="true"></canvas>
 <div id="splash" aria-hidden="true"><div class="sp"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="38" height="38" rx="4" fill="#e3a23c"/><path d="M20 7L33 14V26L20 33L7 26V14Z" fill="none" stroke="#1a1205" stroke-width="3"/><circle cx="20" cy="20" r="4" fill="#1a1205"/></svg><b>CS<i>2</i> SIM</b><div class="spb"><i></i></div></div></div>
@@ -4798,6 +4806,7 @@ A.uspin=()=>{
   const a=ok?ZOFF+zone*(.06+Math.random()*.88):(ZOFF+zone+(360-zone)*(.05+Math.random()*.9))%360;
   const rot=360*6+a;
   const names=ins.map(o=>itemName(o));
+  U.last={lost:ins.map(o=>Object.assign({},o)),t:Object.assign({},t),ch};
   ins.forEach(o=>{const k=S.inv.items.findIndex(x=>x.u===o.u);if(k>=0)S.inv.items.splice(k,1)});
   let won=null;
   if(ok){won=giveItem(t.i,{f:t.f,st:false});S.stat.upW++}else S.stat.upL++;
@@ -4812,9 +4821,19 @@ A.uspin=()=>{
     snd(ok?900:150,.3,'triangle',.08);
     const it=IT[t.i];
     try{const ww=$('.wheelwrap');if(ok){ww&&ww.classList.add('won');fxBurst(ww,'#4fc971',40)}else{fxShake(ww);fxFlash('#e8515a')}}catch(e){}
-    setTimeout(()=>openModal(`<div class="reveal" style="--rc:${RAR[it.r].c}"><h2 style="color:${ok?'var(--win)':'var(--loss)'}">${ok?'Апгрейд удался':'Не повезло'}</h2>${ok?`<div class="big">${imgTag(it)}</div><div class="rt" style="color:${RAR[it.r].c}">${esc(itemName(won))}</div><div class="num" style="font-size:24px;color:#9fe0b0">${money(won.p)}</div>`:`<p class="mut">Вложенные предметы потеряны. Цель была: ${esc(it.n)}.</p>`}<div class="row" style="justify-content:center;margin-top:10px"><button class="btn pri" data-a="close">Закрыть</button></div></div>`,{onclose(){U.target=null;U.mult='';render()}}),FX.reduced?0:900);
+    setTimeout(()=>openModal(`<div class="reveal" style="--rc:${RAR[it.r].c}"><h2 style="color:${ok?'var(--win)':'var(--loss)'}">${ok?'Апгрейд удался':'Не повезло'}</h2>${ok?`<div class="big">${imgTag(it)}</div><div class="rt" style="color:${RAR[it.r].c}">${esc(itemName(won))}</div><div class="num" style="font-size:24px;color:#9fe0b0">${money(won.p)}</div>`:`<p class="mut">Вложенные предметы потеряны. Цель была: ${esc(it.n)}.</p>`}<div class="row" style="justify-content:center;margin-top:10px">${ok?'':'<button class="btn" data-a="uinfo">Инфо</button>'}<button class="btn pri" data-a="close">Закрыть</button></div></div>`,{onclose(){U.target=null;U.mult='';render()}}),FX.reduced?0:900);
   },6300);
 };
+
+/* details of the last failed upgrade: what exactly was lost */
+const wearTxt=o=>{const it=IT[o.i];if(!isPaint(it)||o.f==null)return '';const w=WEARS[wearIdx(o.f)];return w.n+' · float '+(+o.f).toFixed(4)};
+A.uinfo=()=>{const L=U.last;if(!L)return;const sum=L.lost.reduce((a,o)=>a+o.p,0),ti=IT[L.t.i];
+  const row=o=>{const it=IT[o.i],w=wearTxt(o);return `<div class="lostrow" style="--rc:${RAR[it.r].c}"><div class="lostimg">${imgTag(it)}</div><div class="lostt"><b style="color:${RAR[it.r].c}">${esc(itemName(o))}</b><span>${w?esc(w):esc(RAR[it.r].n||'')}</span></div><div class="num lostp">${money(o.p)}</div></div>`};
+  openModal(`<h2>Потерянные предметы</h2>${L.lost.map(row).join('')}
+   <div class="row" style="justify-content:space-between;margin:10px 0 4px"><span class="mut">Итого потеряно</span><b class="num" style="color:var(--loss)">${money(sum)}</b></div>
+   <h3 style="margin:14px 0 6px">Цель апгрейда</h3>${row({i:L.t.i,f:L.t.f,st:false,p:L.t.p})}
+   <p class="hint" style="margin:8px 0 0">Шанс был ${(L.ch*100).toFixed(2).replace(/\.?0+$/,'')}%.</p>
+   <div class="row" style="justify-content:center;margin-top:12px"><button class="btn pri" data-a="close">Закрыть</button></div>`)};
 
 /* ---------- SHOP ---------- */
 let shopT='themed',shopQ='';
