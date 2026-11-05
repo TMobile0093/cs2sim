@@ -4929,8 +4929,19 @@ A.gin=async()=>{if(!window.FBS){toast('Firebase ещё загружается, �
     toast(c==='auth/unauthorized-domain'?'Домен сайта не добавлен в Firebase (Authorized domains)':'Не удалось войти'+(c?': '+c:''),5000)}};
 A.gout=async()=>{try{await FBS.signOut()}catch(e){}toast('Вы вышли — прогресс остаётся на этом устройстве')};
 /* Steam profile lookup (own site only): Steam pages don't allow direct browser requests, so they go through public CORS relays */
-const SPROX=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u),u=>'https://corsproxy.io/?url='+encodeURIComponent(u)];
-async function sFetch(u){let last;for(const f of SPROX){try{const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);const r=await fetch(f(u),{signal:c.signal});clearTimeout(t);if(r.ok){const x=await r.text();if(x&&x.length>20)return x}last=r.status}catch(e){last=e}}throw new Error('relay')}
+/* relays tried in order: Jina Reader returns the raw Steam response (X-Return-Format: text) and allows browser requests */
+const SPROX=[
+  {u:u=>'https://r.jina.ai/'+u,h:{'X-Return-Format':'text'}},
+  {u:u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u)},
+  {u:u=>'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u)}];
+const sLooksOk=x=>x&&(/^\s*</.test(x)&&/<(profile|response)\b/.test(x)||/^\s*\{"response"/.test(x));
+async function sFetch(u,fresh){
+  for(const p of SPROX){
+    try{const c=new AbortController(),t=setTimeout(()=>c.abort(),12000);
+      const h=Object.assign({},p.h||{});if(fresh&&p.h)h['X-No-Cache']='true';
+      const r=await fetch(p.u(u),{signal:c.signal,headers:h});clearTimeout(t);
+      if(r.ok){const x=await r.text();if(sLooksOk(x))return x}}catch(e){}}
+  throw new Error('relay')}
 function sidPath(v){v=v.trim().replace(/\s+/g,'');let m;
   if(/^\d{17}$/.test(v))return 'profiles/'+v;
   if(m=/steamcommunity\.com\/profiles\/(\d{17})/i.exec(v))return 'profiles/'+m[1];
@@ -4943,10 +4954,10 @@ function sidParse(xml){const d=new DOMParser().parseFromString(xml,'text/xml'),g
 A.sidgo=async()=>{const inp=$('#psid'),path=sidPath(inp?inp.value:'');if(!path){toast('Введите Steam ID (17 цифр) или ссылку на профиль');return}
   const btn=document.querySelector('[data-a="sidgo"]');if(btn){btn.disabled=true;btn.textContent='Ищем…'}
   try{
-    let p;try{p=sidParse(await sFetch('https://steamcommunity.com/'+path+'/?xml=1&l=english'))}catch(e){toast('Steam сейчас не отвечает — попробуйте ещё раз чуть позже',4500);return}
+    let p;try{p=sidParse(await sFetch('https://steamcommunity.com/'+path+'/?xml=1&l=english',!!S.steam))}catch(e){toast('Steam сейчас не отвечает — попробуйте ещё раз чуть позже',4500);return}
     if(p.err){toast(/could not be found/i.test(p.err)?'Профиль не найден — проверьте Steam ID':'Не удалось прочитать профиль Steam',4500);return}
     const o={id:p.id,name:p.name||STEAMP0.name,av:p.avf,avs:p.avf,fr:'',frs:''};
-    try{const j=JSON.parse(await sFetch('https://api.steampowered.com/IPlayerService/GetProfileItemsEquipped/v1/?steamid='+p.id)).response||{};
+    try{const j=JSON.parse(await sFetch('https://api.steampowered.com/IPlayerService/GetProfileItemsEquipped/v1/?steamid='+p.id,!!S.steam)).response||{};
       const a=j.animated_avatar,f=j.avatar_frame;
       if(a&&a.image_large){o.av=SIMG+a.image_large;o.avs=a.image_small?SIMG+a.image_small:p.avf}
       if(f&&f.image_large){o.fr=SIMG+f.image_large;o.frs=SIMG+(f.image_small||f.image_large)}}catch(e){}
